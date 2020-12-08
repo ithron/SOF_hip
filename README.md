@@ -3,6 +3,13 @@
 A TFDS wrapper for the SOF dataset.
 Information on how to access the SOF dataset can be found on the [SOF Online website](https://sleepdata.org/datasets/sof).
 
+## Dependencies
+Requires `tensorflow_datasets >= 4.1.0`, `tqdm` and `sof_utils>=0.0.5`.
+```shell
+pip install tfds-nightly tqdm sof_utils>=0.0.5
+```
+
+
 ## Building
 Automatic downloading is not supported since the data is not publicly available.
 
