@@ -127,7 +127,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
             target_width = max(target_width, width)
             target_height = max(target_height, height)
             min_pixel_val = min(min_pixel_val, min_val)
-            max_pixel_val = max(max_pixel_val, max_pixel_val)
+            max_pixel_val = max(max_pixel_val, max_val)
 
         pixel_range = max_pixel_val - min_pixel_val
         num_images -= len(_EXCLUDED)
