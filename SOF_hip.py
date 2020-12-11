@@ -65,8 +65,9 @@ class SOF_hip_config(tfds.core.BuilderConfig):
 class SOF_hip(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for SOF_hip dataset."""
 
-    VERSION = tfds.core.Version('1.0.0')
+    VERSION = tfds.core.Version('1.0.1')
     RELEASE_NOTES = {
+        '1.0.1': 'Fixed black image and import issues',
         '1.0.0': 'Initial release.',
     }
 
@@ -81,7 +82,6 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
 
     def _info(self) -> tfds.core.DatasetInfo:
         """Returns the dataset metadata."""
-        # TODO(SOF_hip): Specifies the tfds.core.DatasetInfo object
         return tfds.core.DatasetInfo(
             builder=self,
             description=_DESCRIPTION,
