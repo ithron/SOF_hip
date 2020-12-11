@@ -65,8 +65,9 @@ class SOF_hip_config(tfds.core.BuilderConfig):
 class SOF_hip(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for SOF_hip dataset."""
 
-    VERSION = tfds.core.Version('1.0.1')
+    VERSION = tfds.core.Version('1.0.2')
     RELEASE_NOTES = {
+        '1.0.2': 'Save example id and visit',
         '1.0.1': 'Fixed black image and import issues',
         '1.0.0': 'Initial release.',
     }
@@ -87,7 +88,9 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
             description=_DESCRIPTION,
             features=tfds.features.FeaturesDict({
                 # These are the features of your dataset like images, labels ...
-                'image': tfds.features.Image(shape=(None, None, 1))
+                'image': tfds.features.Image(shape=(None, None, 1)),
+                'id': tfds.features.Text(),
+                'visit': tfds.features.Tensor(shape=(), dtype=tf.int8)
             }),
             # If there's a common (input, target) tuple from the
             # features, specify them here. They'll be used if
@@ -109,7 +112,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
     def _generate_examples(self, path):
         """Yields examples."""
 
-        from sof_utils import dicom
+        from sof_utils import dicom, misc
         from functools import reduce
         import numpy as np
         from tqdm import tqdm
@@ -152,6 +155,10 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                                                  target_height=target_height)
             image = tf.image.rot90(image).numpy()
 
+            id, visit = misc.id_and_visit_from_filename(dcm_file.name)
+
             yield dcm_file.name, {
-                'image': image
+                'image': image,
+                'id': id,
+                'visit': visit
             }
