@@ -89,7 +89,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
             features=tfds.features.FeaturesDict({
                 # These are the features of your dataset like images, labels ...
                 'image': tfds.features.Image(shape=(None, None, 1)),
-                'id': tfds.features.Text(),
+                'id': tfds.features.Tensor(shape=(), dtype=tf.uint64),
                 'visit': tfds.features.Tensor(shape=(), dtype=tf.int8)
             }),
             # If there's a common (input, target) tuple from the
