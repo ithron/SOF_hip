@@ -80,8 +80,9 @@ class SOF_hip_config(tfds.core.BuilderConfig):
 class SOF_hip(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for SOF_hip dataset."""
 
-    VERSION = tfds.core.Version('1.0.3')
+    VERSION = tfds.core.Version('1.0.4')
     RELEASE_NOTES = {
+        '1.0.4': 'Add the ability to build different splits',
         '1.0.3': 'Add key-point detection configuration',
         '1.0.2': 'Save example id and visit',
         '1.0.1': 'Fixed black image and import issues',
@@ -140,11 +141,13 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
 
         path = dl_manager.manual_dir
 
-        return {
-            'train': self._generate_examples(path),
-        }
+        splits = set([row['split'] for row in self._load_annotations(path)])
 
-    def _generate_examples(self, path):
+        split_dict = {split: self._generate_examples(path, split) for split in splits}
+
+        return split_dict
+
+    def _generate_examples(self, path, split="train"):
         """Yields examples."""
 
         from sof_utils import dicom, misc
@@ -182,17 +185,13 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                                                                  dicom.list_files(path, recursive=True)))))]
 
         if self.builder_config.type == 'keypoint_detection':
-            from csv import DictReader
-            from pathlib import Path
-            # Load label CSV
-            with open(Path(path).joinpath('SOF-keypoint-detection-labels.csv'), 'r') as f:
-                reader = DictReader(f)
-                labels = [self.format_row(row) for row in reader]
+            labels = self._load_annotations(path)
 
             annotation_dict = {}
             for row in labels:
                 key = f"{row['id']}V{row['visit']}{row['left_right']}"
-                annotation_dict[key] = row
+                if row['split'] == split:
+                    annotation_dict[key] = row
             annotated_keys = set(annotation_dict.keys())
 
             # filter out all unannotated images
@@ -273,6 +272,15 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                     'image/visit': visit
                 }
 
+    def _load_annotations(self, path):
+        from csv import DictReader
+        from pathlib import Path
+        # Load label CSV
+        with open(Path(path).joinpath('SOF-keypoint-detection-labels.csv'), 'r') as f:
+            reader = DictReader(f)
+            labels = [self.format_row(row) for row in reader]
+        return labels
+
     @staticmethod
     def format_row(row: Dict) -> Dict:
         new_row = {
@@ -290,6 +298,10 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
             'bbox_min_y': float(row['bbox_min_y']) / 100,
             'bbox_max_y': float(row['bbox_max_y']) / 100,
         }
+        if "split" in row:
+            new_row["split"] = row["split"]
+        else:
+            new_row["split"] = "train"
 
         for i in range(12):
             new_row[f"keypoint_x_{i}"] = float(row[f"keypoint_x_{i}"]) / 100
