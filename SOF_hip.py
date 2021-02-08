@@ -59,13 +59,8 @@ _CITATION = """
 
 _CLASS_LABELS = [
     "complete",
-    "complete_upside_down",
     "incomplete",
-    "incomplete_upside_down",
-    "implant",
-    "implant_upside_down",
-    "incomplete_implant",
-    "incomplete_implant_upside_down"
+    "implant"
 ]
 
 
@@ -80,8 +75,9 @@ class SOF_hip_config(tfds.core.BuilderConfig):
 class SOF_hip(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for SOF_hip dataset."""
 
-    VERSION = tfds.core.Version('1.0.4')
+    VERSION = tfds.core.Version('1.0.5')
     RELEASE_NOTES = {
+        '1.0.5': 'Enforce dominance of the \'implant\' label over \'incomplete\'; remove \'UpsideDown\' as a label.',
         '1.0.4': 'Add the ability to build different splits',
         '1.0.3': 'Add key-point detection configuration',
         '1.0.2': 'Save example id and visit',
@@ -117,6 +113,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
 
         if self.builder_config.type == 'keypoint_detection':
             annotation_features = {
+                'image/upside_down': tfds.features.Tensor(shape=(), dtype=tf.int64),
                 'object/bbox': tfds.features.BBoxFeature(),
                 'object/keypoints': tfds.features.Sequence(tfds.features.Tensor(shape=(2,), dtype=tf.float32)),
                 'object/class': tfds.features.ClassLabel(names=_CLASS_LABELS)
@@ -242,6 +239,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                         'image/id': sof_id,
                         'image/visit': visit,
                         'image/left_right': 'R',
+                        'image/upside_down': annotation['upside_down'],
                         'object/bbox': self._build_bbox(annotation),
                         'object/keypoints': self._build_keypoints(annotation),
                         'object/class': self._build_class(annotation)
@@ -255,6 +253,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                         'image/id': sof_id,
                         'image/visit': visit,
                         'image/left_right': 'L',
+                        'image/upside_down': annotation['upside_down'],
                         'object/bbox': self._build_bbox(annotation),
                         'object/keypoints': self._build_keypoints(annotation),
                         'object/class': self._build_class(annotation)
@@ -327,10 +326,8 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
     @staticmethod
     def _build_class(annotation: Dict) -> int:
         label = int(0)
-        if annotation['upside_down'] > 0:
-            label |= int(1)
         if annotation['incomplete'] > 0:
-            label |= int(2)
+            label = int(1)
         if annotation['implant'] > 0:
-            label |= int(4)
+            label = int(2)
         return label
