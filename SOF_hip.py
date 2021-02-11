@@ -70,13 +70,15 @@ class SOF_hip_config(tfds.core.BuilderConfig):
     split_lr: bool = False
     scale: float = 1.0
     type: str = 'unsupervised'
+    labeled: bool = True
 
 
 class SOF_hip(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for SOF_hip dataset."""
 
-    VERSION = tfds.core.Version('1.0.5')
+    VERSION = tfds.core.Version('1.0.6')
     RELEASE_NOTES = {
+        '1.0.6': 'Add unlabeled keypoint detection dataset',
         '1.0.5': 'Enforce dominance of the \'implant\' label over \'incomplete\'; remove \'UpsideDown\' as a label.',
         '1.0.4': 'Add the ability to build different splits',
         '1.0.3': 'Add key-point detection configuration',
@@ -86,12 +88,15 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
     }
 
     BUILDER_CONFIGS = [
-        SOF_hip_config(name='unsupervised_raw', description='Image data only, unprocessed'),
+        SOF_hip_config(name='unsupervised_raw', description='Image data only, unprocessed', labeled=False),
         SOF_hip_config(name='unsupervised_raw_tiny', description='Image data only, unprocessed, only 1000 examples',
-                       num_images=1000),
+                       num_images=1000, labeled=False),
         SOF_hip_config(name='keypoint_detection',
                        description='Images split in left and right half an downscaled by a factor of 10.',
-                       split_lr=True, scale=0.1, type='keypoint_detection')
+                       split_lr=True, scale=0.1, type='keypoint_detection', labeled=True),
+        SOF_hip_config(name='keypoint_detection_unlabeled',
+                       description='Images split in left and right half an downscaled by a factor of 10.',
+                       split_lr=True, scale=0.1, type='keypoint_detection', labeled=False)
     ]
 
     MANUAL_DOWNLOAD_INSTRUCTIONS = """
@@ -111,7 +116,7 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
         if self.builder_config.split_lr:
             feature_dict['image/left_right'] = tfds.features.Text()
 
-        if self.builder_config.type == 'keypoint_detection':
+        if self.builder_config.type == 'keypoint_detection' and self.builder_config.labeled:
             annotation_features = {
                 'image/upside_down': tfds.features.Tensor(shape=(), dtype=tf.int64),
                 'object/bbox': tfds.features.BBoxFeature(),
@@ -138,7 +143,10 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
 
         path = dl_manager.manual_dir
 
-        splits = set([row['split'] for row in self._load_annotations(path)])
+        if self.builder_config.labeled:
+            splits = set([row['split'] for row in self._load_annotations(path)])
+        else:
+            splits=['train']
 
         split_dict = {split: self._generate_examples(path, split) for split in splits}
 
@@ -182,24 +190,26 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                                                                  dicom.list_files(path, recursive=True)))))]
 
         if self.builder_config.type == 'keypoint_detection':
-            labels = self._load_annotations(path)
 
-            annotation_dict = {}
-            for row in labels:
-                key = f"{row['id']}V{row['visit']}{row['left_right']}"
-                if row['split'] == split:
-                    annotation_dict[key] = row
-            annotated_keys = set(annotation_dict.keys())
+            if self.builder_config.labeled:
+                labels = self._load_annotations(path)
 
-            # filter out all unannotated images
-            all_inc_files = included_files
-            included_files = []
-            for f in all_inc_files:
-                sof_id, visit = misc.id_and_visit_from_filename(f.name)
-                lkey = f"{sof_id}V{visit}R"
-                rkey = f"{sof_id}V{visit}L"
-                if lkey in annotated_keys or rkey in annotated_keys:
-                    included_files.append(f)
+                annotation_dict = {}
+                for row in labels:
+                    key = f"{row['id']}V{row['visit']}{row['left_right']}"
+                    if row['split'] == split:
+                        annotation_dict[key] = row
+                annotated_keys = set(annotation_dict.keys())
+
+                # filter out all unannotated images
+                all_inc_files = included_files
+                included_files = []
+                for f in all_inc_files:
+                    sof_id, visit = misc.id_and_visit_from_filename(f.name)
+                    lkey = f"{sof_id}V{visit}R"
+                    rkey = f"{sof_id}V{visit}L"
+                    if lkey in annotated_keys or rkey in annotated_keys:
+                        included_files.append(f)
 
         for dcm_file in included_files:
 
@@ -231,32 +241,48 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
                 left_key = f"{sof_id}V{visit}R"
                 right_key = f"{sof_id}V{visit}L"
 
-                if left_key in annotated_keys:
-                    annotation = annotation_dict[left_key]
+                if self.builder_config.labeled:
+                    if left_key in annotated_keys:
+                        annotation = annotation_dict[left_key]
+                        yield left_key, {
+                            'image': left_image,
+                            'image/filename': dcm_file.name,
+                            'image/id': sof_id,
+                            'image/visit': visit,
+                            'image/left_right': 'R',
+                            'image/upside_down': annotation['upside_down'],
+                            'object/bbox': self._build_bbox(annotation),
+                            'object/keypoints': self._build_keypoints(annotation),
+                            'object/class': self._build_class(annotation)
+                        }
+
+                    if right_key in annotated_keys:
+                        annotation = annotation_dict[right_key]
+                        yield right_key, {
+                            'image': right_image,
+                            'image/filename': dcm_file.name,
+                            'image/id': sof_id,
+                            'image/visit': visit,
+                            'image/left_right': 'L',
+                            'image/upside_down': annotation['upside_down'],
+                            'object/bbox': self._build_bbox(annotation),
+                            'object/keypoints': self._build_keypoints(annotation),
+                            'object/class': self._build_class(annotation)
+                        }
+                else:
                     yield left_key, {
                         'image': left_image,
                         'image/filename': dcm_file.name,
                         'image/id': sof_id,
                         'image/visit': visit,
-                        'image/left_right': 'R',
-                        'image/upside_down': annotation['upside_down'],
-                        'object/bbox': self._build_bbox(annotation),
-                        'object/keypoints': self._build_keypoints(annotation),
-                        'object/class': self._build_class(annotation)
+                        'image/left_right': 'R'
                     }
-
-                if right_key in annotated_keys:
-                    annotation = annotation_dict[right_key]
                     yield right_key, {
                         'image': right_image,
                         'image/filename': dcm_file.name,
                         'image/id': sof_id,
                         'image/visit': visit,
-                        'image/left_right': 'L',
-                        'image/upside_down': annotation['upside_down'],
-                        'object/bbox': self._build_bbox(annotation),
-                        'object/keypoints': self._build_keypoints(annotation),
-                        'object/class': self._build_class(annotation)
+                        'image/left_right': 'L'
                     }
 
             else:
