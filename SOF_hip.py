@@ -140,13 +140,17 @@ class SOF_hip(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
+        import resource
+        # Quickfix for an issue where the maximum number of open files is exhausted.
+        _, high = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (high, high))
 
         path = dl_manager.manual_dir
 
         if self.builder_config.labeled:
             splits = set([row['split'] for row in self._load_annotations(path)])
         else:
-            splits=['train']
+            splits = ['train']
 
         split_dict = {split: self._generate_examples(path, split) for split in splits}
 
